@@ -44,6 +44,14 @@ docker compose up -d
 docker compose logs -f
 ```
 
+## 📦 Published image (GitHub Container Registry)
+
+You can pull the latest image with:
+
+```bash
+docker pull ghcr.io/ivanjx/frigate-notify:latest
+```
+
 ## ▶️ Running locally (Python)
 
 1. Create a virtual environment and install dependencies:
