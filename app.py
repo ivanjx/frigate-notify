@@ -69,7 +69,7 @@ def zones_in_order(zones, required):
     return False
 
 
-def on_connect(client, userdata, flags, rc):
+def on_connect(client, userdata, flags, rc, properties=None):
     status = "success" if rc == 0 else f"error code {rc}"
     print(f"Connected to MQTT broker '{MQTT_BROKER}' ({status})")
 
