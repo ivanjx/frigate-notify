@@ -5,6 +5,8 @@ import paho.mqtt.client as mqtt
 
 MQTT_BROKER = os.getenv("MQTT_BROKER", "mqtt")
 MQTT_TOPIC = os.getenv("MQTT_TOPIC", "frigate/reviews")
+MQTT_USER = os.getenv("MQTT_USER")
+MQTT_PASSWORD = os.getenv("MQTT_PASSWORD")
 
 FRIGATE_URL = os.getenv("FRIGATE_URL", "http://frigate:5000")
 
@@ -103,6 +105,9 @@ def on_message(client, userdata, msg: mqtt.MQTTMessage):
 client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
 client.on_connect = on_connect
 client.on_message = on_message
+
+if MQTT_USER:
+    client.username_pw_set(MQTT_USER, MQTT_PASSWORD)
 
 client.connect(MQTT_BROKER)
 client.subscribe(MQTT_TOPIC)

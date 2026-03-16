@@ -24,6 +24,8 @@ A small notifier service that listens to Frigate MQTT review events and sends a 
 environment:
   MQTT_BROKER: mqtt
   MQTT_TOPIC: frigate/reviews
+  MQTT_USER: mqtt_user
+  MQTT_PASSWORD: mqtt_password
   FRIGATE_URL: http://frigate:5000
 
   BOT_TOKEN: YOUR_TELEGRAM_TOKEN
@@ -70,6 +72,8 @@ pip install -r requirements.txt
 Optional variables:
 - `MQTT_BROKER` (default: `mqtt`)
 - `MQTT_TOPIC` (default: `frigate/reviews`)
+- `MQTT_USER` (optional)
+- `MQTT_PASSWORD` (optional)
 - `FRIGATE_URL` (default: `http://frigate:5000`)
 - `ZONE_SEQUENCE` (default: `Pavers,Door`)
 
