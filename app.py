@@ -24,22 +24,30 @@ ZONE_SEQUENCE = [
 
 
 def send_telegram(text, image_url):
+    img_bytes = None
     try:
         r = requests.get(image_url, timeout=10)
         r.raise_for_status()
         img_bytes = r.content
     except Exception as e:
         print(f"Failed to download image: {e}")
-        return False
 
-    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendPhoto"
-    files = {
-        "photo": ("photo.jpg", img_bytes, "image/jpeg")
-    }
-    data = {
-        "chat_id": CHAT_ID,
-        "caption": text
-    }
+    if img_bytes:
+        url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendPhoto"
+        files = {
+            "photo": ("photo.jpg", img_bytes, "image/jpeg")
+        }
+        data = {
+            "chat_id": CHAT_ID,
+            "caption": text
+        }
+    else:
+        url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+        files = None
+        data = {
+            "chat_id": CHAT_ID,
+            "text": text
+        }
 
     try:
         resp = requests.post(url, data=data, files=files, timeout=20)
