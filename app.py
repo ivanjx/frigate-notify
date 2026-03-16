@@ -69,6 +69,11 @@ def zones_in_order(zones, required):
     return False
 
 
+def on_connect(client, userdata, flags, rc):
+    status = "success" if rc == 0 else f"error code {rc}"
+    print(f"Connected to MQTT broker '{MQTT_BROKER}' ({status})")
+
+
 def on_message(client, userdata, msg: mqtt.MQTTMessage):
     print(f"MQTT message received: payload={msg.payload.decode('utf-8', errors='replace')}")
     payload = json.loads(msg.payload)
@@ -96,6 +101,7 @@ def on_message(client, userdata, msg: mqtt.MQTTMessage):
 
 
 client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
+client.on_connect = on_connect
 client.on_message = on_message
 
 client.connect(MQTT_BROKER)
