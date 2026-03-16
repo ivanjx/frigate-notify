@@ -69,7 +69,7 @@ def zones_in_order(zones, required):
     return False
 
 
-def on_message(client, userdata, msg):
+def on_message(client, userdata, msg: mqtt.MQTTMessage):
     print(f"MQTT message received: payload={msg.payload.decode('utf-8', errors='replace')}")
     payload = json.loads(msg.payload)
 
@@ -95,7 +95,7 @@ def on_message(client, userdata, msg):
     )
 
 
-client = mqtt.Client()
+client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
 client.on_message = on_message
 
 client.connect(MQTT_BROKER)
