@@ -1,0 +1,14 @@
+services:
+  frigate-telegram:
+    build: .
+    restart: unless-stopped
+
+    environment:
+      MQTT_BROKER: mqtt
+      MQTT_TOPIC: frigate/reviews
+      FRIGATE_URL: http://frigate:5000
+
+      BOT_TOKEN: YOUR_TELEGRAM_TOKEN
+      CHAT_ID: -1001234567890
+
+      ZONE_SEQUENCE: Street,Pavers,Door,Porch
