@@ -36,5 +36,5 @@ jobs:
           tags: |
             ghcr.io/${{ github.repository }}:latest
             ghcr.io/${{ github.repository }}:${{ github.sha }}
-          cache-from: type=registry,ref=ghcr.io/${{ github.repository }}:latest
-          cache-to: type=registry,ref=ghcr.io/${{ github.repository }}:latest,mode=max
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
