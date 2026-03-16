@@ -70,7 +70,7 @@ def zones_in_order(zones, required):
 
 
 def on_message(client, userdata, msg):
-
+    print(f"MQTT message received: payload={msg.payload.decode('utf-8', errors='replace')}")
     payload = json.loads(msg.payload)
 
     if payload.get("type") != "new":
@@ -78,7 +78,6 @@ def on_message(client, userdata, msg):
 
     after = payload["after"]
     data = after["data"]
-
     objects = data.get("objects", [])
     zones = data.get("zones", [])
 
@@ -89,9 +88,7 @@ def on_message(client, userdata, msg):
         return
 
     review_id = after["id"]
-
     snapshot = f"{FRIGATE_URL}/api/review/thumb/{review_id}.webp"
-
     send_telegram(
         f"Entrance detected\nCamera: {after['camera']}",
         snapshot
