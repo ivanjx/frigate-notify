@@ -8,7 +8,6 @@ MQTT_BROKER = os.getenv("MQTT_BROKER", "mqtt")
 MQTT_TOPIC = os.getenv("MQTT_TOPIC", "frigate/reviews")
 MQTT_USER = os.getenv("MQTT_USER")
 MQTT_PASSWORD = os.getenv("MQTT_PASSWORD")
-FRIGATE_URL = os.getenv("FRIGATE_URL", "http://frigate:5000")
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 CHAT_ID = os.getenv("CHAT_ID")
 ZONE_SEQUENCE = [
@@ -17,8 +16,6 @@ ZONE_SEQUENCE = [
 
 if not MQTT_BROKER:
     raise SystemExit("Missing required environment variable: MQTT_BROKER")
-if not FRIGATE_URL:
-    raise SystemExit("Missing required environment variable: FRIGATE_URL")
 if not BOT_TOKEN:
     raise SystemExit("Missing required environment variable: BOT_TOKEN")
 if not CHAT_ID:
@@ -32,14 +29,15 @@ NOTIFIED_AT: dict[str, float] = {}
 NOTIFY_SUPPRESSION_SECONDS = 10 * 60  # 10 minutes
 
 
-def send_telegram(text, image_url):
+def send_telegram(text, thumbnail_path):
     img_bytes = None
-    try:
-        r = requests.get(image_url, timeout=10)
-        r.raise_for_status()
-        img_bytes = r.content
-    except Exception as e:
-        print(f"Failed to download image: {e}")
+
+    if thumbnail_path:
+        try:
+            with open(thumbnail_path, "rb") as f:
+                img_bytes = f.read()
+        except Exception as e:
+            print(f"Failed to read image file '{thumbnail_path}': {e}")
 
     if img_bytes:
         url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendPhoto"
@@ -102,6 +100,7 @@ def on_message(client, userdata, msg: mqtt.MQTTMessage):
     objects = data.get("objects", [])
     zones = data.get("zones", [])
     review_id = after["id"]
+    thumbnail = after.get("thumb_path", "")
 
     # Compare
     if "person" not in objects:
@@ -118,10 +117,9 @@ def on_message(client, userdata, msg: mqtt.MQTTMessage):
         return
 
     # Send notification
-    snapshot = f"{FRIGATE_URL}/api/review/thumb/{review_id}.webp"
     send_status = send_telegram(
         f"Entrance detected\nCamera: {after['camera']}",
-        snapshot
+        thumbnail
     )
     if send_status:
         NOTIFIED_AT[review_id] = now
@@ -143,5 +141,4 @@ if MQTT_USER:
 
 client.connect(MQTT_BROKER)
 client.subscribe(MQTT_TOPIC)
-
 client.loop_forever()

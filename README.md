@@ -13,25 +13,32 @@ A small notifier service that listens to Frigate MQTT review events and sends a 
 
 - Python 3.9+
 - MQTT broker reachable by the service
-- Frigate instance exposing the `/api/review/thumb/<id>.webp` endpoint
+- Access to Frigate's media store (e.g. mount `/media/frigate` into the container)
 - Telegram bot token + target chat ID
 
 ## 🚀 Quick-start (Docker Compose)
 
-1. Copy and update the environment values in `docker-compose.yml`:
+1. Copy and update the environment values in `docker-compose.yml` and mount Frigate's media store so thumbnails can be read:
 
 ```yaml
-environment:
-  MQTT_BROKER: mqtt
-  MQTT_TOPIC: frigate/reviews
-  MQTT_USER: mqtt_user
-  MQTT_PASSWORD: mqtt_password
-  FRIGATE_URL: http://frigate:5000
+services:
+  frigate-telegram:
+    build: .
+    restart: unless-stopped
 
-  BOT_TOKEN: YOUR_TELEGRAM_TOKEN
-  CHAT_ID: -1001234567890
+    volumes:
+      - path/to/frigate/data:/media/frigate:ro
 
-  ZONE_SEQUENCE: Street,Pavers,Door,Porch
+    environment:
+      MQTT_BROKER: mqtt
+      MQTT_TOPIC: frigate/reviews
+      MQTT_USER: mqtt_user
+      MQTT_PASSWORD: mqtt_password
+
+      BOT_TOKEN: YOUR_TELEGRAM_TOKEN
+      CHAT_ID: -1001234567890
+
+      ZONE_SEQUENCE: Street,Pavers,Door,Porch
 ```
 
 2. Start the service:
@@ -74,7 +81,6 @@ Optional variables:
 - `MQTT_TOPIC` (default: `frigate/reviews`)
 - `MQTT_USER` (optional)
 - `MQTT_PASSWORD` (optional)
-- `FRIGATE_URL` (default: `http://frigate:5000`)
 - `ZONE_SEQUENCE` (default: `Pavers,Door`)
 
 3. Run the service:
@@ -99,4 +105,4 @@ ZONE_SEQUENCE=Street,Pavers,Door,Porch
 
 - If the app exits immediately, verify `BOT_TOKEN` and `CHAT_ID` are set.
 - If Telegram send fails, check logs for the Telegram API response (it will print the returned JSON error).
-- Ensure the Frigate URL can be reached from the container/host and that the review thumbnail endpoint is valid.
+- Ensure the Frigate media directory is mounted and accessible (e.g. `/media/frigate`) so thumbnails can be read.
