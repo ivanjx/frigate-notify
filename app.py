@@ -29,20 +29,24 @@ NOTIFIED_AT: dict[str, float] = {}
 NOTIFY_SUPPRESSION_SECONDS = 10 * 60  # 10 minutes
 
 
-def send_telegram(text, thumbnail_path):
-    img_bytes = None
 
-    if thumbnail_path:
-        try:
-            with open(thumbnail_path, "rb") as f:
-                img_bytes = f.read()
-        except Exception as e:
-            print(f"Failed to read image file '{thumbnail_path}': {e}")
+
+def send_telegram(text, file_path):
+    img_bytes = None
+    try:
+        with open(file_path, "rb") as f:
+            img_bytes = f.read()
+    except Exception as e:
+        print(f"Failed to read image file '{file_path}': {e}")
+        img_bytes = None
 
     if img_bytes:
         url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendPhoto"
+        filename = os.path.basename(file_path) if file_path else "photo.jpg"
+        content_type = "image/jpeg"
+
         files = {
-            "photo": ("photo.jpg", img_bytes, "image/jpeg")
+            "photo": (filename, img_bytes, content_type)
         }
         data = {
             "chat_id": CHAT_ID,
@@ -100,7 +104,6 @@ def on_message(client, userdata, msg: mqtt.MQTTMessage):
     objects = data.get("objects", [])
     zones = data.get("zones", [])
     review_id = after["id"]
-    thumbnail = after.get("thumb_path", "")
 
     # Compare
     if "person" not in objects:
@@ -117,10 +120,14 @@ def on_message(client, userdata, msg: mqtt.MQTTMessage):
         return
 
     # Send notification
-    send_status = send_telegram(
-        f"Entrance detected\nCamera: {after['camera']}",
-        thumbnail
-    )
+    data = after.get("data", {})
+    detections = data.get("detections", [])
+    camera = after.get("camera")
+    file_path = None
+    if detections and camera:
+        first_det = detections[0]
+        file_path = os.path.join("/media/frigate/clips", f"{camera}-{first_det}.jpg")
+    send_status = send_telegram(f"Entrance detected\nCamera: {camera}", file_path)
     if send_status:
         NOTIFIED_AT[review_id] = now
 
