@@ -88,7 +88,7 @@ def on_message(client, userdata, msg: mqtt.MQTTMessage):
     print(f"MQTT message received: payload={msg.payload.decode('utf-8', errors='replace')}")
     payload = json.loads(msg.payload)
 
-    if payload.get("type") != "new":
+    if payload.get("type") != "end":
         return
 
     after = payload["after"]
