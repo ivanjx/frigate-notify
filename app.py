@@ -257,7 +257,7 @@ def handle_message(msg: mqtt.MQTTMessage):
             for det in detections:
                 file_paths.append(os.path.join("/media/frigate/clips", f"{camera}-{det}.jpg"))
 
-        send_status = send_telegram(f"Entrance detected\nCamera: {camera}", file_paths)
+        send_status = send_telegram(f"Entrance detected\nCamera: {camera}", file_paths[:10])
         if send_status:
             with NOTIFIED_AT_LOCK:
                 NOTIFIED_AT[review_id] = now
