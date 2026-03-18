@@ -36,6 +36,7 @@ def post_with_retries(url, data=None, files=None, timeout=REQUEST_TIMEOUT):
             resp = requests.post(url, data=data, files=files, timeout=timeout)
         except requests.RequestException as e:
             # network-level error, retry
+            print(f"Telegram request error on attempt {attempt+1}: {e}")
             if attempt == RETRY_MAX_ATTEMPTS - 1:
                 print(f"Telegram request failed after {attempt+1} attempts: {e}")
                 return None
@@ -45,6 +46,7 @@ def post_with_retries(url, data=None, files=None, timeout=REQUEST_TIMEOUT):
 
         # Handle rate limiting explicitly (Telegram may include parameters.retry_after)
         if resp.status_code == 429:
+            print("Telegram rate limited, retrying...")
             try:
                 body = resp.json()
                 retry_after = body.get("parameters", {}).get("retry_after")
@@ -64,6 +66,7 @@ def post_with_retries(url, data=None, files=None, timeout=REQUEST_TIMEOUT):
 
         # Retry on server errors
         if 500 <= resp.status_code < 600:
+            print(f"Telegram server error ({resp.status_code}), retrying...")
             if attempt == RETRY_MAX_ATTEMPTS - 1:
                 return resp
             backoff = min(RETRY_BACKOFF_MAX, RETRY_BACKOFF_BASE * (2 ** attempt)) + random.random()
