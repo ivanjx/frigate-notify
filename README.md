@@ -4,7 +4,7 @@ A small notifier service that listens to Frigate MQTT review events and sends a 
 
 ## ✅ Features
 
-- Subscribes to Frigate `frigate/reviews` MQTT topic
+- Subscribes to Frigate `frigate/events` MQTT topic
 - Filters events for `person` and a configured zone sequence
 - Downloads the review thumbnail (`.webp`) from Frigate
 - Sends the image as a Telegram photo message to a configured chat
@@ -31,7 +31,6 @@ services:
 
     environment:
       MQTT_BROKER: mqtt
-      MQTT_TOPIC: frigate/reviews
       MQTT_USER: mqtt_user
       MQTT_PASSWORD: mqtt_password
 
@@ -78,7 +77,6 @@ pip install -r requirements.txt
 
 Optional variables:
 - `MQTT_BROKER` (default: `mqtt`)
-- `MQTT_TOPIC` (default: `frigate/reviews`)
 - `MQTT_USER` (optional)
 - `MQTT_PASSWORD` (optional)
 - `ZONE_SEQUENCE` (default: `Pavers,Door`)
@@ -93,7 +91,7 @@ python app.py
 
 ### Zone sequence filtering
 
-`ZONE_SEQUENCE` controls the required zone order in the Frigate review event. The service will send a Telegram alert only when the event zones include the provided list in order.
+`ZONE_SEQUENCE` controls the required zone order in the Frigate event payload. The service will send a Telegram alert only when the event zones include the provided list in order.
 
 Example:
 

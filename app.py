@@ -8,7 +8,7 @@ import concurrent.futures
 import paho.mqtt.client as mqtt
 
 MQTT_BROKER = os.getenv("MQTT_BROKER", "mqtt")
-MQTT_TOPIC = os.getenv("MQTT_TOPIC", "frigate/reviews")
+MQTT_TOPIC = "frigate/events"
 MQTT_USER = os.getenv("MQTT_USER")
 MQTT_PASSWORD = os.getenv("MQTT_PASSWORD")
 BOT_TOKEN = os.getenv("BOT_TOKEN")
@@ -21,15 +21,6 @@ RETRY_MAX_ATTEMPTS = int(os.getenv("TELEGRAM_RETRY_ATTEMPTS", "5"))
 RETRY_BACKOFF_BASE = float(os.getenv("TELEGRAM_RETRY_BACKOFF_BASE", "1.0"))
 RETRY_BACKOFF_MAX = float(os.getenv("TELEGRAM_RETRY_BACKOFF_MAX", "16.0"))
 REQUEST_TIMEOUT = float(os.getenv("TELEGRAM_REQUEST_TIMEOUT", "20"))
-
-if not MQTT_BROKER:
-    raise SystemExit("Missing required environment variable: MQTT_BROKER")
-if not BOT_TOKEN:
-    raise SystemExit("Missing required environment variable: BOT_TOKEN")
-if not CHAT_ID:
-    raise SystemExit("Missing required environment variable: CHAT_ID")
-if not ZONE_SEQUENCE:
-    raise SystemExit("Missing required environment variable: ZONE_SEQUENCE")
 
 NOTIFIED_AT: dict[str, float] = {}
 NOTIFIED_AT_LOCK = threading.Lock()
@@ -197,11 +188,6 @@ def send_telegram(text, file_paths):
     return success
 
 
-def on_connect(client, userdata, flags, rc, properties=None):
-    status = "success" if rc == 0 else f"error code {rc}"
-    print(f"Connected to MQTT broker '{MQTT_BROKER}' ({status})")
-
-
 def zones_in_order(zones, required):
     pos = 0
 
@@ -214,25 +200,56 @@ def zones_in_order(zones, required):
     return False
 
 
-def on_message(client, userdata, msg: mqtt.MQTTMessage):
-    # Submit processing to the worker pool so the MQTT network thread is not blocked
-    try:
-        executor.submit(handle_message, msg)
-    except Exception as e:
-        print(f"Failed to submit MQTT message to worker pool: {e}")
+def _as_list(value):
+    if value is None:
+        return []
+    if isinstance(value, list):
+        return value
+    return [value]
 
 
-# Worker function runs in a background thread
+def extract_event_context(payload):
+    after = payload.get("after")
+    if not isinstance(after, dict):
+        return None
+
+    data = after.get("data")
+    if isinstance(data, dict):
+        objects = _as_list(data.get("objects"))
+        zones = _as_list(data.get("zones"))
+        detections = _as_list(data.get("detections"))
+    else:
+        objects = _as_list(after.get("label"))
+        zones = _as_list(after.get("current_zones"))
+        if not zones:
+            zones = _as_list(after.get("entered_zones"))
+        detections = []
+
+    return {
+        "event_type": payload.get("type"),
+        "review_id": after.get("id"),
+        "camera": after.get("camera"),
+        "objects": objects,
+        "zones": zones,
+        "detections": detections,
+        "after": after,
+    }
+
+
 def handle_message(msg: mqtt.MQTTMessage):
     try:
         # Parse the payload
         print(f"MQTT message received: payload={msg.payload.decode('utf-8', errors='replace')}")
         payload = json.loads(msg.payload)
-        after = payload["after"]
-        data = after["data"]
-        objects = data.get("objects", [])
-        zones = data.get("zones", [])
-        review_id = after["id"]
+        context = extract_event_context(payload)
+        if context is None:
+            print("MQTT payload missing after data")
+            return
+
+        objects = context["objects"]
+        zones = context["zones"]
+        review_id = context["review_id"]
+        camera = context["camera"]
 
         # Compare
         if "person" not in objects:
@@ -242,23 +259,26 @@ def handle_message(msg: mqtt.MQTTMessage):
 
         # Do not resend notifications for the same review id within the suppression window
         now = time.time()
-        with NOTIFIED_AT_LOCK:
-            last_sent = NOTIFIED_AT.get(review_id)
-            if last_sent is not None and (now - last_sent) < NOTIFY_SUPPRESSION_SECONDS:
-                print(f"Notification already sent for review id {review_id}")
-                return
+        if review_id:
+            with NOTIFIED_AT_LOCK:
+                last_sent = NOTIFIED_AT.get(review_id)
+                if last_sent is not None and (now - last_sent) < NOTIFY_SUPPRESSION_SECONDS:
+                    print(f"Notification already sent for review id {review_id}")
+                    return
 
         # Send notification
-        data = after.get("data", {})
-        detections = data.get("detections", [])
-        camera = after.get("camera")
+        detections = context["detections"]
         file_paths = []
         if detections and camera:
             for det in detections:
                 file_paths.append(os.path.join("/media/frigate/clips", f"{camera}-{det}.jpg"))
 
-        send_status = send_telegram(f"Entrance detected\nCamera: {camera}", file_paths[:10])
-        if send_status:
+        print(f"Sending Telegram notification for review id {review_id} with objects {objects} in zones {zones}")
+        message_lines = ["Entrance detected"]
+        if camera:
+            message_lines.append(f"Camera: {camera}")
+        send_status = send_telegram("\n".join(message_lines), file_paths[:5])
+        if send_status and review_id:
             with NOTIFIED_AT_LOCK:
                 NOTIFIED_AT[review_id] = now
 
@@ -273,13 +293,36 @@ def handle_message(msg: mqtt.MQTTMessage):
         print(f"Exception in MQTT message handler: {e}")
 
 
-client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
-client.on_connect = on_connect
-client.on_message = on_message
+def on_connect(client, userdata, flags, rc, properties=None):
+    status = "success" if rc == 0 else f"error code {rc}"
+    print(f"Connected to MQTT broker '{MQTT_BROKER}' ({status})")
 
-if MQTT_USER:
-    client.username_pw_set(MQTT_USER, MQTT_PASSWORD)
 
-client.connect(MQTT_BROKER)
-client.subscribe(MQTT_TOPIC)
-client.loop_forever()
+def on_message(client, userdata, msg: mqtt.MQTTMessage):
+    # Submit processing to the worker pool so the MQTT network thread is not blocked
+    try:
+        executor.submit(handle_message, msg)
+    except Exception as e:
+        print(f"Failed to submit MQTT message to worker pool: {e}")
+
+
+def create_client():
+    client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
+    client.on_connect = on_connect
+    client.on_message = on_message
+
+    if MQTT_USER:
+        client.username_pw_set(MQTT_USER, MQTT_PASSWORD)
+
+    client.connect(MQTT_BROKER)
+    client.subscribe(MQTT_TOPIC)
+    return client
+
+
+def main():
+    client = create_client()
+    client.loop_forever()
+
+
+if __name__ == "__main__":
+    main()
