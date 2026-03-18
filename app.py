@@ -76,25 +76,8 @@ def post_with_retries(url, data=None, files=None, timeout=REQUEST_TIMEOUT):
     return None
 
 
-def send_telegram(text, file_paths):
-    # Normalize to a list of paths
-    if file_paths is None:
-        file_paths = []
-    elif isinstance(file_paths, str):
-        file_paths = [file_paths]
-
-    img_entries = []
-    for fp in file_paths:
-        try:
-            with open(fp, "rb") as f:
-                img_bytes = f.read()
-            img_entries.append((fp, img_bytes))
-        except Exception as e:
-            print(f"Failed to read image file '{fp}': {e}")
-            continue
-
-    # No images -> send text message
-    if not img_entries:
+def send_telegram(text, file_path=None):
+    if not file_path:
         url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
         data = {"chat_id": CHAT_ID, "text": text}
         resp = post_with_retries(url, data=data)
@@ -120,72 +103,43 @@ def send_telegram(text, file_paths):
             return False
         return True
 
-    # Single image -> sendPhoto
-    if len(img_entries) == 1:
-        fp, img_bytes = img_entries[0]
-        url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendPhoto"
-        filename = os.path.basename(fp) if fp else "photo.jpg"
-        files = {"photo": (filename, img_bytes, "image/jpeg")}
-        data = {"chat_id": CHAT_ID, "caption": text}
-        resp = post_with_retries(url, data=data, files=files)
-        if resp is None:
-            return False
+    try:
+        with open(file_path, "rb") as f:
+            img_bytes = f.read()
+    except Exception as e:
+        print(f"Failed to read image file '{file_path}': {e}")
+        return False
 
-        try:
-            resp.raise_for_status()
-        except requests.RequestException as e:
-            details = resp.text if 'resp' in locals() else ''
-            print(f"Telegram send failed: {e} — {details}")
-            return False
-
-        try:
-            json_resp = resp.json()
-        except ValueError:
-            details = resp.text if 'resp' in locals() else ''
-            print(f"Telegram send failed: invalid JSON response — {details}")
-            return False
-
-        if not json_resp.get("ok"):
-            print("Telegram API returned error:", json_resp)
-            return False
-        return True
-
-    # Multiple images -> send all images in a single sendMediaGroup
-    success = True
-    files = {}
-    media = []
-    for idx, (fp, img_bytes) in enumerate(img_entries):
-        field_name = f"photo{idx}"
-        filename = os.path.basename(fp) if fp else f"photo{idx}.jpg"
-        files[field_name] = (filename, img_bytes, "image/jpeg")
-        item = {"type": "photo", "media": f"attach://{field_name}"}
-        # include caption on the first media item
-        if idx == 0:
-            item["caption"] = text
-        media.append(item)
-
-    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMediaGroup"
-    data = {"chat_id": CHAT_ID, "media": json.dumps(media)}
+    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendPhoto"
+    filename = os.path.basename(file_path) if file_path else "photo.jpg"
+    files = {"photo": (filename, img_bytes, "image/jpeg")}
+    data = {"chat_id": CHAT_ID, "caption": text}
     resp = post_with_retries(url, data=data, files=files)
     if resp is None:
         return False
 
     try:
         resp.raise_for_status()
-        json_resp = resp.json()
-        if not json_resp.get("ok"):
-            print("Telegram API returned error:", json_resp)
-            success = False
     except requests.RequestException as e:
         details = resp.text if 'resp' in locals() else ''
         print(f"Telegram send failed: {e} — {details}")
-        success = False
+        return False
     except ValueError:
         details = resp.text if 'resp' in locals() else ''
         print(f"Telegram send failed: invalid JSON response — {details}")
-        success = False
+        return False
 
-    return success
+    try:
+        json_resp = resp.json()
+    except ValueError:
+        details = resp.text if 'resp' in locals() else ''
+        print(f"Telegram send failed: invalid JSON response — {details}")
+        return False
+
+    if not json_resp.get("ok"):
+        print("Telegram API returned error:", json_resp)
+        return False
+    return True
 
 
 def zones_in_order(zones, required):
@@ -217,11 +171,9 @@ def extract_event_context(payload):
     if isinstance(data, dict):
         objects = _as_list(data.get("objects"))
         zones = _as_list(data.get("zones"))
-        detections = _as_list(data.get("detections"))
     else:
         objects = _as_list(after.get("label"))
         zones = _as_list(after.get("entered_zones"))
-        detections = []
 
     return {
         "event_type": payload.get("type"),
@@ -229,7 +181,6 @@ def extract_event_context(payload):
         "camera": after.get("camera"),
         "objects": objects,
         "zones": zones,
-        "detections": detections,
         "after": after,
     }
 
@@ -266,17 +217,15 @@ def handle_message(msg: mqtt.MQTTMessage):
                 NOTIFIED_AT[review_id] = now
 
         # Send notification
-        detections = context["detections"]
-        file_paths = []
-        if detections and camera:
-            for det in detections:
-                file_paths.append(os.path.join("/media/frigate/clips", f"{camera}-{det}.jpg"))
+        file_path = None
+        if review_id and camera:
+            file_path = os.path.join("/media/frigate/clips", f"{camera}-{review_id}.jpg")
 
         print(f"Sending Telegram notification for review id {review_id} with objects {objects} in zones {zones}")
         message_lines = ["Entrance detected"]
         if camera:
             message_lines.append(f"Camera: {camera}")
-        send_telegram("\n".join(message_lines), file_paths[:5])
+        send_telegram("\n".join(message_lines), file_path)
 
         # Periodically prune old entries to avoid unbounded memory growth
         with NOTIFIED_AT_LOCK:

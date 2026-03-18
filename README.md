@@ -6,7 +6,7 @@ A small notifier service that listens to Frigate MQTT review events and sends a 
 
 - Subscribes to Frigate `frigate/events` MQTT topic
 - Filters events for `person` and a configured zone sequence
-- Downloads the review thumbnail (`.webp`) from Frigate
+- Downloads the review image for the event review ID from Frigate
 - Sends the image as a Telegram photo message to a configured chat
 
 ## 🧩 Requirements
@@ -103,4 +103,4 @@ ZONE_SEQUENCE=Street,Pavers,Door,Porch
 
 - If the app exits immediately, verify `BOT_TOKEN` and `CHAT_ID` are set.
 - If Telegram send fails, check logs for the Telegram API response (it will print the returned JSON error).
-- Ensure the Frigate media directory is mounted and accessible (e.g. `/media/frigate`) so thumbnails can be read.
+- Ensure the Frigate media directory is mounted and accessible (e.g. `/media/frigate`) so review images can be read.
