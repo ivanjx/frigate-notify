@@ -2,6 +2,7 @@ import json
 import os
 import time
 import random
+from urllib.parse import quote
 import requests
 import threading
 import concurrent.futures
@@ -13,6 +14,7 @@ MQTT_USER = os.getenv("MQTT_USER")
 MQTT_PASSWORD = os.getenv("MQTT_PASSWORD")
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 CHAT_ID = os.getenv("CHAT_ID")
+FRIGATE_URL = os.getenv("FRIGATE_URL", "").rstrip("/")
 ZONE_SEQUENCE = [
     z.strip() for z in os.getenv("ZONE_SEQUENCE", "Pavers,Door").split(",")
 ]
@@ -20,7 +22,7 @@ ZONE_SEQUENCE = [
 RETRY_MAX_ATTEMPTS = int(os.getenv("TELEGRAM_RETRY_ATTEMPTS", "5"))
 RETRY_BACKOFF_BASE = float(os.getenv("TELEGRAM_RETRY_BACKOFF_BASE", "1.0"))
 RETRY_BACKOFF_MAX = float(os.getenv("TELEGRAM_RETRY_BACKOFF_MAX", "16.0"))
-REQUEST_TIMEOUT = float(os.getenv("TELEGRAM_REQUEST_TIMEOUT", "20"))
+REQUEST_TIMEOUT = float(os.getenv("TELEGRAM_REQUEST_TIMEOUT", "5"))
 
 NOTIFIED_AT: dict[str, float] = {}
 NOTIFIED_AT_LOCK = threading.Lock()
@@ -79,17 +81,23 @@ def post_with_retries(url, data=None, files=None, timeout=REQUEST_TIMEOUT):
     return None
 
 
-def send_telegram(text, file_path=None):
-    img_bytes = None
+def fetch_latest_image(camera):
+    if not FRIGATE_URL:
+        print("FRIGATE_URL is not set")
+        return None
 
-    if file_path:
-        try:
-            with open(file_path, "rb") as f:
-                img_bytes = f.read()
-        except Exception as e:
-            print(f"Failed to read image file '{file_path}': {e}")
+    image_url = f"{FRIGATE_URL}/api/{quote(camera, safe='')}/latest.jpg"
+    try:
+        resp = requests.get(image_url, timeout=REQUEST_TIMEOUT)
+        resp.raise_for_status()
+        return resp.content
+    except requests.RequestException as e:
+        print(f"Failed to fetch latest image for camera '{camera}' from '{image_url}': {e}")
+        return None
 
-    if not img_bytes:
+
+def send_telegram(text, photo_bytes=None):
+    if not photo_bytes:
         # Send without photo
         url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
         data = {"chat_id": CHAT_ID, "text": text}
@@ -118,7 +126,7 @@ def send_telegram(text, file_path=None):
 
     # Send with photo
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendPhoto"
-    files = {"photo": ("photo.jpg", img_bytes, "image/webp")}
+    files = {"photo": ("photo.jpg", photo_bytes, "image/jpeg")}
     data = {"chat_id": CHAT_ID, "caption": text}
     resp = post_with_retries(url, data=data, files=files)
     if resp is None:
@@ -224,14 +232,11 @@ def handle_message(msg: mqtt.MQTTMessage):
 
         # Send notification
         print(f"Sending Telegram notification for review id {review_id} with objects {objects} in zones {zones}")
-        file_path = None
-        if review_id and camera:
-            file_path = os.path.join("/media/frigate/clips", f"{camera}-{review_id}-clean.webp")
-
+        photo_bytes = fetch_latest_image(camera) if camera else None
         message_lines = ["Entrance detected"]
         if camera:
             message_lines.append(f"Camera: {camera}")
-        send_status = send_telegram("\n".join(message_lines), file_path)
+        send_status = send_telegram("\n".join(message_lines), photo_bytes)
         if send_status:
             print(f"Telegram notification sent for review id {review_id}")
         else:

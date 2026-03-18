@@ -3,13 +3,11 @@ services:
     build: .
     restart: unless-stopped
 
-    volumes:
-      - path/to/frigate/data:/media/frigate:ro
-
     environment:
       MQTT_BROKER: mqtt
       MQTT_USER: mqtt_user
       MQTT_PASSWORD: mqtt_password
+      FRIGATE_URL: http://frigate:5000
 
       BOT_TOKEN: YOUR_TELEGRAM_TOKEN
       CHAT_ID: -1001234567890

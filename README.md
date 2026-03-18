@@ -6,19 +6,19 @@ A small notifier service that listens to Frigate MQTT review events and sends a 
 
 - Subscribes to Frigate `frigate/events` MQTT topic
 - Filters events for `person` and a configured zone sequence
-- Downloads the review image for the event review ID from Frigate
+- Downloads the latest camera image from Frigate over HTTP
 - Sends the image as a Telegram photo message to a configured chat
 
 ## 🧩 Requirements
 
 - Python 3.9+
 - MQTT broker reachable by the service
-- Access to Frigate's media store (e.g. mount `/media/frigate` into the container)
+- Frigate HTTP API reachable by the service
 - Telegram bot token + target chat ID
 
 ## 🚀 Quick-start (Docker Compose)
 
-1. Copy and update the environment values in `docker-compose.yml` and mount Frigate's media store so thumbnails can be read:
+1. Copy and update the environment values in `docker-compose.yml` and set Frigate's base URL so latest images can be fetched:
 
 ```yaml
 services:
@@ -26,13 +26,11 @@ services:
     build: .
     restart: unless-stopped
 
-    volumes:
-      - path/to/frigate/data:/media/frigate:ro
-
     environment:
       MQTT_BROKER: mqtt
       MQTT_USER: mqtt_user
       MQTT_PASSWORD: mqtt_password
+      FRIGATE_URL: http://frigate:5000
 
       BOT_TOKEN: YOUR_TELEGRAM_TOKEN
       CHAT_ID: -1001234567890
@@ -79,6 +77,7 @@ Optional variables:
 - `MQTT_BROKER` (default: `mqtt`)
 - `MQTT_USER` (optional)
 - `MQTT_PASSWORD` (optional)
+- `FRIGATE_URL` (required, e.g. `http://frigate:5000`)
 - `ZONE_SEQUENCE` (default: `Pavers,Door`)
 
 3. Run the service:
@@ -88,6 +87,10 @@ python app.py
 ```
 
 ## 🔧 Configuration
+
+### Frigate image source
+
+The service fetches the latest image for the matched camera from `FRIGATE_URL/api/{cam}/latest.jpg` and sends that image to Telegram.
 
 ### Zone sequence filtering
 
@@ -103,4 +106,4 @@ ZONE_SEQUENCE=Street,Pavers,Door,Porch
 
 - If the app exits immediately, verify `BOT_TOKEN` and `CHAT_ID` are set.
 - If Telegram send fails, check logs for the Telegram API response (it will print the returned JSON error).
-- Ensure the Frigate media directory is mounted and accessible (e.g. `/media/frigate`) so review images can be read.
+- If images are missing, verify `FRIGATE_URL` is set and reachable from the container.
