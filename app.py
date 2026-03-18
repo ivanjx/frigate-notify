@@ -220,9 +220,7 @@ def extract_event_context(payload):
         detections = _as_list(data.get("detections"))
     else:
         objects = _as_list(after.get("label"))
-        zones = _as_list(after.get("current_zones"))
-        if not zones:
-            zones = _as_list(after.get("entered_zones"))
+        zones = _as_list(after.get("entered_zones"))
         detections = []
 
     return {
