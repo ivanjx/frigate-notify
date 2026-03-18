@@ -228,7 +228,7 @@ def handle_message(msg: mqtt.MQTTMessage):
         if review_id and camera:
             file_path = os.path.join("/media/frigate/clips", f"{camera}-{review_id}.jpg")
         if file_path and not os.path.isfile(file_path):
-            time.sleep(1) # Slight delay to allow file to be written by Frigate
+            time.sleep(2) # Slight delay to allow file to be written by Frigate
 
         message_lines = ["Entrance detected"]
         if camera:
