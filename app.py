@@ -225,7 +225,11 @@ def handle_message(msg: mqtt.MQTTMessage):
         message_lines = ["Entrance detected"]
         if camera:
             message_lines.append(f"Camera: {camera}")
-        send_telegram("\n".join(message_lines), file_path)
+        send_status = send_telegram("\n".join(message_lines), file_path)
+        if send_status:
+            print(f"Telegram notification sent for review id {review_id}")
+        else:
+            print(f"Failed to send Telegram notification for review id {review_id}")
 
         # Periodically prune old entries to avoid unbounded memory growth
         with NOTIFIED_AT_LOCK:
