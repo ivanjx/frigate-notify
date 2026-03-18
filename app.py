@@ -24,7 +24,7 @@ REQUEST_TIMEOUT = float(os.getenv("TELEGRAM_REQUEST_TIMEOUT", "20"))
 
 NOTIFIED_AT: dict[str, float] = {}
 NOTIFIED_AT_LOCK = threading.Lock()
-NOTIFY_SUPPRESSION_SECONDS = 10 * 60  # 10 minutes
+NOTIFY_SUPPRESSION_SECONDS = 5 * 60  # 5 minutes
 
 MQTT_WORKER_THREADS = max(1, os.cpu_count() or 1)
 executor = concurrent.futures.ThreadPoolExecutor(max_workers=MQTT_WORKER_THREADS)
@@ -73,14 +73,24 @@ def post_with_retries(url, data=None, files=None, timeout=REQUEST_TIMEOUT):
             time.sleep(backoff)
             continue
 
-        # For 4xx (other than 429) do not retry
+        # For other status codes (2xx, 4xx except 429), do not retry
         return resp
 
     return None
 
 
 def send_telegram(text, file_path=None):
-    if not file_path:
+    img_bytes = None
+
+    if file_path:
+        try:
+            with open(file_path, "rb") as f:
+                img_bytes = f.read()
+        except Exception as e:
+            print(f"Failed to read image file '{file_path}': {e}")
+
+    if not img_bytes:
+        # Send without photo
         url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
         data = {"chat_id": CHAT_ID, "text": text}
         resp = post_with_retries(url, data=data)
@@ -106,16 +116,9 @@ def send_telegram(text, file_path=None):
             return False
         return True
 
-    try:
-        with open(file_path, "rb") as f:
-            img_bytes = f.read()
-    except Exception as e:
-        print(f"Failed to read image file '{file_path}': {e}")
-        return False
-
+    # Send with photo
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendPhoto"
-    filename = os.path.basename(file_path) if file_path else "photo.jpg"
-    files = {"photo": (filename, img_bytes, "image/jpeg")}
+    files = {"photo": ("photo.jpg", img_bytes, "image/jpeg")}
     data = {"chat_id": CHAT_ID, "caption": text}
     resp = post_with_retries(url, data=data, files=files)
     if resp is None:
@@ -220,11 +223,13 @@ def handle_message(msg: mqtt.MQTTMessage):
                 NOTIFIED_AT[review_id] = now
 
         # Send notification
+        print(f"Sending Telegram notification for review id {review_id} with objects {objects} in zones {zones}")
         file_path = None
         if review_id and camera:
             file_path = os.path.join("/media/frigate/clips", f"{camera}-{review_id}.jpg")
+        if file_path and not os.path.isfile(file_path):
+            time.sleep(1) # Slight delay to allow file to be written by Frigate
 
-        print(f"Sending Telegram notification for review id {review_id} with objects {objects} in zones {zones}")
         message_lines = ["Entrance detected"]
         if camera:
             message_lines.append(f"Camera: {camera}")
