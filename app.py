@@ -118,7 +118,7 @@ def send_telegram(text, file_path=None):
 
     # Send with photo
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendPhoto"
-    files = {"photo": ("photo.jpg", img_bytes, "image/jpeg")}
+    files = {"photo": ("photo.jpg", img_bytes, "image/webp")}
     data = {"chat_id": CHAT_ID, "caption": text}
     resp = post_with_retries(url, data=data, files=files)
     if resp is None:
@@ -226,9 +226,9 @@ def handle_message(msg: mqtt.MQTTMessage):
         print(f"Sending Telegram notification for review id {review_id} with objects {objects} in zones {zones}")
         file_path = None
         if review_id and camera:
-            file_path = os.path.join("/media/frigate/clips", f"{camera}-{review_id}.jpg")
+            file_path = os.path.join("/media/frigate/clips", f"{camera}-{review_id}-clean.webp")
         if file_path and not os.path.isfile(file_path):
-            time.sleep(2) # Slight delay to allow file to be written by Frigate
+            time.sleep(1) # Slight delay to allow file to be written by Frigate
 
         message_lines = ["Entrance detected"]
         if camera:
