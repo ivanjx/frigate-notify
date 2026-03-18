@@ -263,6 +263,7 @@ def handle_message(msg: mqtt.MQTTMessage):
                 if last_sent is not None and (now - last_sent) < NOTIFY_SUPPRESSION_SECONDS:
                     print(f"Notification already sent for review id {review_id}")
                     return
+                NOTIFIED_AT[review_id] = now
 
         # Send notification
         detections = context["detections"]
@@ -275,10 +276,7 @@ def handle_message(msg: mqtt.MQTTMessage):
         message_lines = ["Entrance detected"]
         if camera:
             message_lines.append(f"Camera: {camera}")
-        send_status = send_telegram("\n".join(message_lines), file_paths[:5])
-        if send_status and review_id:
-            with NOTIFIED_AT_LOCK:
-                NOTIFIED_AT[review_id] = now
+        send_telegram("\n".join(message_lines), file_paths[:5])
 
         # Periodically prune old entries to avoid unbounded memory growth
         with NOTIFIED_AT_LOCK:
