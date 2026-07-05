@@ -30,6 +30,7 @@ services:
       MQTT_BROKER: mqtt
       MQTT_USER: mqtt_user
       MQTT_PASSWORD: mqtt_password
+      MQTT_CLIENT_ID: frigate-notify
       FRIGATE_URL: http://frigate:5000
 
       BOT_TOKEN: YOUR_TELEGRAM_TOKEN
@@ -72,13 +73,20 @@ pip install -r requirements.txt
 
 - `BOT_TOKEN` - your Telegram bot token (from @BotFather)
 - `CHAT_ID` - target chat or channel ID (e.g. `-1001234567890`)
+- `FRIGATE_URL` - Frigate base URL (e.g. `http://frigate:5000`)
 
 Optional variables:
 - `MQTT_BROKER` (default: `mqtt`)
 - `MQTT_USER` (optional)
 - `MQTT_PASSWORD` (optional)
-- `FRIGATE_URL` (required, e.g. `http://frigate:5000`)
+- `MQTT_CLIENT_ID` (default: `frigate-notify`)
+- `MQTT_RECONNECT_MIN_DELAY` (default: `1`)
+- `MQTT_RECONNECT_MAX_DELAY` (default: `60`)
 - `ZONE_SEQUENCE` (default: `Pavers,Door`)
+- `TELEGRAM_RETRY_ATTEMPTS` (default: `5`)
+- `TELEGRAM_RETRY_BACKOFF_BASE` (default: `1.0`)
+- `TELEGRAM_RETRY_BACKOFF_MAX` (default: `16.0`)
+- `TELEGRAM_REQUEST_TIMEOUT` (default: `5`)
 
 3. Run the service:
 

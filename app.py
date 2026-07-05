@@ -12,6 +12,9 @@ MQTT_BROKER = os.getenv("MQTT_BROKER", "mqtt")
 MQTT_TOPIC = "frigate/events"
 MQTT_USER = os.getenv("MQTT_USER")
 MQTT_PASSWORD = os.getenv("MQTT_PASSWORD")
+MQTT_CLIENT_ID = os.getenv("MQTT_CLIENT_ID", "frigate-notify")
+MQTT_RECONNECT_MIN_DELAY = int(os.getenv("MQTT_RECONNECT_MIN_DELAY", "1"))
+MQTT_RECONNECT_MAX_DELAY = int(os.getenv("MQTT_RECONNECT_MAX_DELAY", "60"))
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 CHAT_ID = os.getenv("CHAT_ID")
 FRIGATE_URL = os.getenv("FRIGATE_URL", "").rstrip("/")
@@ -253,9 +256,37 @@ def handle_message(msg: mqtt.MQTTMessage):
         print(f"Exception in MQTT message handler: {e}")
 
 
-def on_connect(client, userdata, flags, rc, properties=None):
-    status = "success" if rc == 0 else f"error code {rc}"
-    print(f"Connected to MQTT broker '{MQTT_BROKER}' ({status})")
+def reason_code_failed(reason_code):
+    is_failure = getattr(reason_code, "is_failure", None)
+    if is_failure is not None:
+        if callable(is_failure):
+            return is_failure()
+        return is_failure
+    return reason_code != 0
+
+
+def on_connect(client, userdata, flags, reason_code, properties=None):
+    if reason_code_failed(reason_code):
+        print(f"Failed to connect to MQTT broker '{MQTT_BROKER}' ({reason_code})")
+        return
+
+    print(f"Connected to MQTT broker '{MQTT_BROKER}'")
+    result, mid = client.subscribe(MQTT_TOPIC)
+    if result == mqtt.MQTT_ERR_SUCCESS:
+        print(f"Subscribed to MQTT topic '{MQTT_TOPIC}' (mid={mid})")
+    else:
+        print(f"Failed to subscribe to MQTT topic '{MQTT_TOPIC}': {mqtt.error_string(result)}")
+
+
+def on_connect_fail(client, userdata):
+    print(f"Failed to connect to MQTT broker '{MQTT_BROKER}', retrying...")
+
+
+def on_disconnect(client, userdata, disconnect_flags, reason_code, properties=None):
+    if reason_code_failed(reason_code):
+        print(f"Disconnected from MQTT broker '{MQTT_BROKER}' ({reason_code}), reconnecting...")
+    else:
+        print(f"Disconnected from MQTT broker '{MQTT_BROKER}'")
 
 
 def on_message(client, userdata, msg: mqtt.MQTTMessage):
@@ -267,21 +298,26 @@ def on_message(client, userdata, msg: mqtt.MQTTMessage):
 
 
 def create_client():
-    client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
+    client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id=MQTT_CLIENT_ID)
     client.on_connect = on_connect
+    client.on_connect_fail = on_connect_fail
+    client.on_disconnect = on_disconnect
     client.on_message = on_message
+    client.reconnect_delay_set(
+        min_delay=MQTT_RECONNECT_MIN_DELAY,
+        max_delay=MQTT_RECONNECT_MAX_DELAY,
+    )
 
     if MQTT_USER:
         client.username_pw_set(MQTT_USER, MQTT_PASSWORD)
 
-    client.connect(MQTT_BROKER)
-    client.subscribe(MQTT_TOPIC)
+    client.connect_async(MQTT_BROKER)
     return client
 
 
 def main():
     client = create_client()
-    client.loop_forever()
+    client.loop_forever(retry_first_connection=True)
 
 
 if __name__ == "__main__":
